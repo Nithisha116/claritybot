@@ -1,0 +1,13 @@
+This file tells Streamlit Cloud what dependencies to install
+
+Streamlit for the app interface
+
+streamlit
+
+Google GenAI SDK for the Gemini API
+
+google-genai
+
+Requests is often necessary for robust API calls or HTTP handling (as noted in your PPT)
+
+requests
