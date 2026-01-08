@@ -1,144 +1,122 @@
 import streamlit as st
-import requests
-import json
-import time
-import os
+from google import genai
+import base64
 
-# --- IMPORTANT: GEMINI API KEY SETUP ---
-# CRITICAL FIX: Load API Key securely using Streamlit's secrets management.
-try:
-    # 1. Preferred method for Streamlit Cloud deployment
-    API_KEY = st.secrets["GEMINI_API_KEY"]
-except KeyError:
-    # 2. Fallback for local development using environment variable (if set)
-    API_KEY = os.environ.get("GEMINI_API_KEY", "YOUR_HARDCODED_KEY_FOR_LOCAL_TESTING_ONLY")
+# --- CONFIGURATION ---
+API_KEY = "AIzaSyBYIqp4_D0H9DrWmhhCKsATyvVh7VYmHAA"
+client = genai.Client(api_key=API_KEY)
+MODEL_ID = "gemini-2.5-flash"
 
-if API_KEY == "YOUR_HARDCODED_KEY_FOR_LOCAL_TESTING_ONLY":
-    st.error("ERROR: API Key is not set securely. Please configure the 'GEMINI_API_KEY' secret on the Streamlit Cloud dashboard.")
-    st.stop()
+# --- PAGE SETUP ---
+st.set_page_config(page_title="ClarityBot | Wellness AI", page_icon="🌿", layout="centered")
 
+# --- BACKGROUND FUNCTION ---
+def set_background(image_file):
+    try:
+        with open(image_file, "rb") as f:
+            img_data = f.read()
+        b64_encoded = base64.b64encode(img_data).decode()
+        style = f"""
+            <style>
+            .stApp {{
+                background-image: url("data:image/png;base64,{b64_encoded}");
+                background-size: cover;
+                background-repeat: no-repeat;
+                background-attachment: fixed;
+            }}
+            </style>
+        """
+        st.markdown(style, unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.warning("Background image not found. Please ensure 'background.jpg' is in the project folder.")
 
-# Using the model name from your previous code
-MODEL_NAME = "gemini-2.5-flash-preview-05-20"
-API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={API_KEY}"
+# Uncomment the line below once you have your background.jpg file ready!
+# set_background("background.jpg")
 
-# --- APP SETUP ---
-
-st.set_page_config(page_title="ClarityBot: Mental Wellness Assistant", layout="centered")
-
-st.title("ClarityBot: Your AI Wellness Check-in")
+# --- CUSTOM STYLING (CSS) ---
 st.markdown("""
-<style>
-    /* Cleaned up CSS formatting */
-    .reportview-container { background: #f0f2f6; }
-    .chat-container { padding: 10px; border-radius: 10px; background-color: #ffffff; }
-    .stButton>button { background-color: #4CAF50; color: white; font-weight: bold; border-radius: 8px; }
-    .stTextInput>div>div>input { border-radius: 8px; }
-</style>
-""", unsafe_allow_html=True)
-
-# Initialize chat history in Streamlit session state
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    # Add a friendly welcome message
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": "Hello! I'm ClarityBot, an AI wellness coach. I'm here to listen, offer coping strategies, and provide non-medical, empathetic support. How are you feeling today?"
-    })
-
-# --- API CALL FUNCTION WITH EXPONENTIAL BACKOFF ---
-
-def generate_response(prompt_text, history):
-    # System instruction to define the bot's persona (Crucial for an AI wellness app)
-    system_prompt = (
-        "You are ClarityBot, a compassionate and non-judgmental AI mental wellness coach. "
-        "Your purpose is to provide empathetic listening, suggest general coping mechanisms "
-        "like deep breathing or journaling, and encourage users to seek professional help "
-        "if they indicate a crisis. DO NOT provide medical advice, diagnosis, or crisis "
-        "intervention (just gently suggest contacting a professional helpline). "
-        "Keep responses supportive, brief, and focused on the user's emotional state."
-    )
-
-    # Convert history into the required API format
-    chat_history = []
-    for message in history:
-        role = "user" if message["role"] == "user" else "model"
-        chat_history.append({"role": role, "parts": [{"text": message["content"]}]})
-
-    chat_history.append({"role": "user", "parts": [{"text": prompt_text}]})
-
-    payload = {
-        "contents": chat_history,
-        "systemInstruction": {"parts": [{"text": system_prompt}]},
+    <style>
+    /* Chat Message Styling */
+    .stChatMessage {
+        border-radius: 15px;
+        padding: 10px;
+        margin-bottom: 10px;
+        background-color: rgba(255, 255, 255, 0.8) !important; /* Slight transparency for background */
+    }
+    
+    /* Green Clear Conversation Button Styling */
+    div.stButton > button:first-child {
+        background-color: #4CAF50 !important;
+        color: white !important;
+        border-radius: 8px !important;
+        border: none !important;
+        padding: 0.5rem 1rem !important;
+        font-weight: bold !important;
+    }
+    
+    div.stButton > button:first-child:hover {
+        background-color: #45a049 !important;
+        color: white !important;
     }
 
-    headers = {'Content-Type': 'application/json'}
-    max_retries = 3
-    delay = 1
+    h1 {
+        color: #2e7d32;
+        font-family: 'Helvetica Neue', sans-serif;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-    for attempt in range(max_retries):
-        try:
-            response = requests.post(API_URL, headers=headers, data=json.dumps(payload), timeout=15)
-            response.raise_for_status()
+# --- SIDEBAR ---
+with st.sidebar:
+    st.title("🌿 ClarityBot")
+    st.info("Your safe space for mental clarity and wellness support.")
+    st.divider()
+    st.caption("Note: I am an AI, not a doctor. If you are in crisis, please seek professional help.")
 
-            result = response.json()
-            candidate = result.get('candidates', [{}])[0]
+# --- MAIN INTERFACE ---
+st.title("ClarityBot: Your Wellness Check-in")
+st.write("Take a deep breath and share what's on your mind.")
 
-            if not candidate or 'text' not in candidate.get('content', {}).get('parts', [{}])[0]:
-                return "I seem to be having trouble processing that right now. Could you rephrase it?"
+# --- SESSION STATE ---
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {"role": "model", "parts": [{"text": "Hello! I'm ClarityBot, your AI wellness coach. I'm here to listen. How are you feeling today?"}]}
+    ]
 
-            return candidate['content']['parts'][0]['text']
-
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 403:
-                # If the 403 error still occurs, inform the user about the key
-                return "HTTP Error: 403 Client Error: Forbidden. The API key is rejected. Please verify the key is correctly set in Streamlit Secrets."
-
-            if attempt < max_retries - 1 and e.response.status_code in [429, 500, 503]:
-                time.sleep(delay)
-                delay *= 2
-                continue
-
-            return f"An API error occurred: {e}. Please try again."
-
-        except requests.exceptions.RequestException as e:
-            return f"A connection error occurred: {e}."
-
-    return "I'm still unable to connect to the AI service after multiple tries."
-
-
-# --- STREAMLIT UI LOGIC ---
-
-# Display chat messages from history on app rerun
+# Display chat history
 for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    role = "assistant" if message["role"] == "model" else "user"
+    with st.chat_message(role):
+        st.markdown(message["parts"][0]["text"])
 
-# User input prompt
-if prompt := st.chat_input("What's on your mind?"):
+# --- INPUT SECTION (Button + Chat Bar) ---
 
-    # 1. Add user message to chat history
-    st.session_state.messages.append({"role": "user", "content": prompt})
+# 1. Clear Conversation Button placed directly above chat input
+if st.button("🔄 Clear Conversation"):
+    st.session_state.messages = [
+        {"role": "model", "parts": [{"text": "Hello! I'm ClarityBot. How are you feeling today?"}]}
+    ]
+    st.rerun()
+
+# 2. Chat Input
+if prompt := st.chat_input("Share your thoughts here..."):
+    # User Message
+    st.session_state.messages.append({"role": "user", "parts": [{"text": prompt}]})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. Get AI response and display loading state
+    # Assistant Response
     with st.chat_message("assistant"):
-        with st.spinner("ClarityBot is listening..."):
-            response = generate_response(prompt, st.session_state.messages)
-
-        # 3. Add assistant response to chat history
-        st.markdown(response)
-        st.session_state.messages.append({"role": "assistant", "content": response})
-
-# Button to clear history
-if st.button("🔄 Clear Conversation"):
-    st.session_state.messages = []
-    # Re-add the welcome message upon clearing
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": "Conversation cleared! How can I support you now? Remember, I'm here to listen."
-    })
-    st.rerun()
-
-
+        try:
+            response = client.models.generate_content(
+                model=MODEL_ID,
+                contents=st.session_state.messages,
+                config={'system_instruction': 'You are a calm, empathetic wellness coach named ClarityBot. Keep responses encouraging and concise.'}
+            )
+            
+            bot_text = response.text
+            st.markdown(bot_text)
+            st.session_state.messages.append({"role": "model", "parts": [{"text": bot_text}]})
+            
+        except Exception as e:
+            st.error(f"Something went wrong: {e}")
