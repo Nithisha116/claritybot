@@ -3,7 +3,7 @@ from google import genai
 import base64
 
 # --- CONFIGURATION ---
-API_KEY = "AIzaSyBYIqp4_D0H9DrWmhhCKsATyvVh7VYmHAA"
+API_KEY = st.secrets["GEMINI_API_KEY"]
 client = genai.Client(api_key=API_KEY)
 MODEL_ID = "gemini-2.5-flash"
 
